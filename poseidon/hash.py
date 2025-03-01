@@ -1,6 +1,6 @@
 import enum
 import numpy as np
-import galois
+from sage.all import *
 
 from math import log2, ceil
 from typing import Optional
@@ -69,7 +69,7 @@ class Poseidon:
                                                                                               self.t, self.alpha, True)
 
         print("Initialize field")
-        self.field_p = galois.GF(p)
+        self.field_p = GF(p)
 
         print("Initialize MDS matrix")
         if mds_matrix is not None:
@@ -83,12 +83,12 @@ class Poseidon:
         if rc_list is not None:
             if len(rc_list) != self.t * (self.full_round + self.partial_round):
                 raise ValueError('Invalid number of round constants')
-            self.rc_field = self.field_p([int(x, 16) for x in rc_list])
+            self.rc_field = [self.field_p(int(x, 16)) for x in rc_list]
         else:
             self.rc_field = rc.calc_round_constants(self.t, self.full_round, self.partial_round, self.p, self.field_p,
                                                     self.alpha, self.prime_bit_len)
 
-        self.state = self.field_p.Zeros(self.t)
+        self.state = list(vector(self.field_p, self.t))
         self.rc_counter = 0
 
     def s_box(self, element):
@@ -126,7 +126,7 @@ class Poseidon:
         """
         if len(input_vec) < self.t:
             input_vec.extend([0] * (self.t - len(input_vec)))
-        self.state = self.field_p(input_vec)
+        self.state = [self.field_p(x) for x in input_vec]
         self.rc_counter = 0
 
         # First full rounds
@@ -172,7 +172,7 @@ class OptimizedPoseidon(Poseidon):
         self.hash_type = h_type
 
         print("Initialize optimized RC")
-        split_rc = [self.field_p(x.tolist()) for x in np.array_split(self.rc_field, len(self.rc_field) / self.t)]
+        split_rc = [[self.field_p(a) for a in x.tolist()]  for x in np.array_split(self.rc_field, len(self.rc_field) / self.t)]
         self.opt_rc_field = rc.optimized_rc(split_rc, self.half_full_round, self.partial_round, self.mds_matrix)
         print("Initialize optimized MDS")
         self.pre_matrix, self.spase_matrices = rc.optimized_matrix(self.mds_matrix, self.partial_round, self.field_p)

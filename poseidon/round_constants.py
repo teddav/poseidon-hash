@@ -1,5 +1,6 @@
 from copy import deepcopy
 import numpy as np
+from sage.all import *
 
 
 def get_field_matrix_from_hex_matrix(field_p, mds_matrix):
@@ -11,10 +12,10 @@ def get_field_matrix_from_hex_matrix(field_p, mds_matrix):
     :return: 2-dim array of size t*t. Consist of field elements.
     """
     n = len(mds_matrix)
-    mds_matrix_field = field_p.Zeros((n, n))
+    mds_matrix_field = [list(vector(field_p, n)) for _ in range(n)]
     for i in range(0, n):
         for j in range(0, n):
-            mds_matrix_field[i, j] = field_p(int(mds_matrix[i][j], 16))
+            mds_matrix_field[i][j] = field_p(int(mds_matrix[i][j], 16))
     return mds_matrix_field
 
 
@@ -167,7 +168,7 @@ def mds_matrix_generator(field_p, t):
     x_vec = [field_p(ele) for ele in range(0, t)]
     y_vec = [field_p(ele) for ele in range(t, 2 * t)]
 
-    mds_matrix = field_p.Zeros((t, t))
+    mds_matrix = [list(vector(field_p, t)) for _ in range(t)]
     for i in range(t):
         for j in range(t):
             mds_matrix[i, j] = (x_vec[i] + y_vec[j]) ** (-1)
@@ -191,7 +192,9 @@ def optimized_rc(rc, half_full_round, partial_round, mds_matrix):
     :rtype list:
     """
     opt_rc_field = []
-    m_inv = np.linalg.inv(mds_matrix)
+    mds_matrix = Matrix(mds_matrix)
+    m_inv = np.array(mds_matrix.inverse().list(), dtype=int)
+    # m_inv_np = np.array(m_inv.tolist(), dtype=int)
 
     # pre round constant
     opt_rc_field.extend(rc[0])
