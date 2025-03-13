@@ -193,34 +193,38 @@ def optimized_rc(rc, half_full_round, partial_round, mds_matrix):
     """
     opt_rc_field = []
     mds_matrix = Matrix(mds_matrix)
-    m_inv = np.array(mds_matrix.inverse().list(), dtype=int)
-    # m_inv_np = np.array(m_inv.tolist(), dtype=int)
+    m_inv = mds_matrix.inverse()
 
     # pre round constant
     opt_rc_field.extend(rc[0])
     # half_full_round - 2 constants for full rounds
     for r in range(1, half_full_round):
-        buf = np.dot(rc[r], m_inv)
+        rc_vector = vector(rc[r])
+        buf = list(rc_vector * m_inv)
         opt_rc_field.extend(buf)
 
     partial_const = []
     final_round = half_full_round + partial_round
-    acc = deepcopy(rc[final_round])
+    acc = vector(deepcopy(rc[final_round]))
+
     for r in (range(0, partial_round)):
-        acc_1 = acc @ m_inv
+        acc_1 = acc * m_inv
         partial_const.append(acc_1[0])
+        acc_1 = list(acc_1)
         acc_1[0] = 0
-        acc = acc_1 + rc[final_round - r - 1]
+        acc = vector(acc_1) + vector(rc[final_round - r - 1])
 
     # const for r = half_full_round - 1 round
-    opt_rc_field.extend(acc @ m_inv)
+    opt_rc_field.extend(list(acc * m_inv))
+
     # partial_round constants for partial rounds
     opt_rc_field.extend(partial_const[::-1])
 
     # half_full_round - 1 constants for full rounds
     start = half_full_round + partial_round
     for r in range(1, half_full_round):
-        opt_rc_field.extend(rc[start + r] @ m_inv)
+        rc_vector = vector(rc[start + r])
+        opt_rc_field.extend(list(rc_vector * m_inv))
 
     return opt_rc_field
 
@@ -237,11 +241,11 @@ def optimized_matrix(mds_matrix, partial_round, field_p):
         and list of 2-dim arrays correspond to sparce matrices each of which is of the size of t*t.
     """
     sparse_matrices = []
-    m = deepcopy(mds_matrix)
+    m = Matrix(deepcopy(mds_matrix))
     for r in range(0, partial_round):
         m_1, m_2 = sparse_factorize(m, field_p)
         sparse_matrices.append(m_2)
-        m = mds_matrix @ m_1
+        m = mds_matrix * m_1
     pre_matrix = m
     sparse_matrices.reverse()
 
@@ -262,14 +266,17 @@ def sparse_factorize(m, field_p):
     m_1[:, 0] = 0
     m_1[0, 0] = 1
 
+    # Create m_2 matrix
+    m_2 = deepcopy(m)
+    m_2[0, :] = m[0, :]
     w = m[1:, 0]
     m_cap = m[1:, 1:]
-    m_inv = np.linalg.inv(m_cap)
-    w_cap = m_inv @ w
+    m_inv = m_cap.inverse()
+    w_cap = m_inv * w
 
-    m_2 = field_p.Identity(len(m))
+    m_2 = identity_matrix(field_p, m.nrows())
     m_2[0, :] = m[0, :]
     m_2[1:, 0] = w_cap
 
-    assert np.array_equal(m, m_1 @ m_2)
+    assert m == m_1 * m_2
     return m_1, m_2

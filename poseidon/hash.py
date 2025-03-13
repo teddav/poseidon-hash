@@ -75,9 +75,9 @@ class Poseidon:
         if mds_matrix is not None:
             if (len(mds_matrix) != self.t) & (len(mds_matrix[0]) != self.t):
                 raise ValueError('Invalid size of MDS matrix')
-            self.mds_matrix = rc.get_field_matrix_from_hex_matrix(self.field_p, mds_matrix)
+            self.mds_matrix = Matrix(rc.get_field_matrix_from_hex_matrix(self.field_p, mds_matrix))
         else:
-            self.mds_matrix = rc.mds_matrix_generator(self.field_p, self.t)
+            self.mds_matrix = Matrix(rc.mds_matrix_generator(self.field_p, self.t))
 
         print("Initialize Round Constant")
         if rc_list is not None:
@@ -172,7 +172,7 @@ class OptimizedPoseidon(Poseidon):
         self.hash_type = h_type
 
         print("Initialize optimized RC")
-        split_rc = [[self.field_p(a) for a in x.tolist()]  for x in np.array_split(self.rc_field, len(self.rc_field) / self.t)]
+        split_rc = [[self.field_p(a) for a in x.tolist()] for x in np.array_split(self.rc_field, len(self.rc_field) / self.t)]
         self.opt_rc_field = rc.optimized_rc(split_rc, self.half_full_round, self.partial_round, self.mds_matrix)
         print("Initialize optimized MDS")
         self.pre_matrix, self.spase_matrices = rc.optimized_matrix(self.mds_matrix, self.partial_round, self.field_p)
@@ -202,7 +202,9 @@ class OptimizedPoseidon(Poseidon):
                 self.state[i] = self.state[i] + self.opt_rc_field[self.rc_counter]
                 self.rc_counter += 1
 
-            self.state = np.dot(self.state, self.mds_matrix)
+            # Convert state to Sage vector and use Sage matrix multiplication
+            state_vector = vector(self.field_p, self.state)
+            self.state = list(state_vector * self.mds_matrix)
 
     def partial_rounds(self):
         for r in range(0, self.partial_round):
@@ -211,8 +213,9 @@ class OptimizedPoseidon(Poseidon):
             self.state[0] = self.state[0] + self.opt_rc_field[self.rc_counter]
             self.rc_counter += 1
 
-            # apply MDS matrix
-            self.state = np.dot(self.state, self.spase_matrices[r])
+            # Convert state to Sage vector and use Sage matrix multiplication
+            state_vector = vector(self.field_p, self.state)
+            self.state = list(state_vector * self.spase_matrices[r])
 
     def run_hash(self, input_vec):
         """
@@ -225,7 +228,7 @@ class OptimizedPoseidon(Poseidon):
         self.rc_counter = 0
 
         st = self.domain_separation(input_vec)
-        self.state = self.field_p(st)
+        self.state = [self.field_p(x) for x in st]
 
         # add pre-round constant
         for i in range(0, self.t):
@@ -239,7 +242,10 @@ class OptimizedPoseidon(Poseidon):
             self.state[i] = self.s_box(self.state[i])
             self.state[i] = self.state[i] + self.opt_rc_field[self.rc_counter]
             self.rc_counter += 1
-        self.state = np.matmul(self.state, self.pre_matrix)
+
+        # Convert state to Sage vector and use Sage matrix multiplication
+        state_vector = vector(self.field_p, self.state)
+        self.state = list(state_vector * self.pre_matrix)
 
         # Middle partial rounds
         self.partial_rounds()
@@ -250,6 +256,9 @@ class OptimizedPoseidon(Poseidon):
         # do once for r = R - 1
         for i in range(0, self.t):
             self.state[i] = self.s_box(self.state[i])
-        self.state = np.matmul(self.state, self.mds_matrix)
+
+        # Convert state to Sage vector and use Sage matrix multiplication
+        state_vector = vector(self.field_p, self.state)
+        self.state = list(state_vector * self.mds_matrix)
 
         return self.state[1]
